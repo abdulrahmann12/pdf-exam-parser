@@ -111,53 +111,67 @@ def parse_pdf(file_bytes: bytes) -> List[Dict[str, Any]]:
     with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
         full_text = "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
 
-    # Split on double newlines (question blocks)
-    for idx, block in enumerate(full_text.strip().split("\n\n")):
-        lines = block.strip().splitlines()
-        questionText = ""
-        questionType = ""
-        marks = 1
-        choices = []
-        reading_choices = False
+    lines = full_text.strip().splitlines()
 
-        for line in lines:
-            line = line.strip()
-            if line.lower().startswith("q:"):
-                questionText = line[2:].strip() if len(line) > 2 else ""
-            elif line.lower().startswith("type:"):
-                questionType = line[5:].strip().upper()
-            elif line.lower().startswith("marks:"):
-                try:
-                    marks = int(line[6:].strip())
-                except Exception:
-                    marks = 1
-            elif line.lower().startswith("choices:"):
-                reading_choices = True
-            elif reading_choices and (line and (line[0].isdigit() or line[0]=='-')):
-                # E.g., "1. Option [*]"
-                rest = line.split(".", 1)[1] if "." in line else line
-                rest = rest.strip()
-                is_correct = False
-                if rest.endswith("*"):
-                    is_correct = True
-                    rest = rest[:-1].strip()
-                choices.append({
-                    "choiceText": rest,
-                    "isCorrect": is_correct,
-                    "choiceOrder": len(choices) + 1
-                })
-            elif reading_choices and not line:
-                # End of choices section
-                reading_choices = False
+    # Helper to build a question dict from accumulated state
+    def _flush(q_text, q_type, q_marks, q_choices, q_order):
+        if q_text or q_choices:
+            questions.append({
+                "questionText": q_text,
+                "questionType": q_type,
+                "questionOrder": q_order,
+                "marks": q_marks,
+                "choices": q_choices
+            })
 
-        question = {
-            "questionText": questionText,
-            "questionType": questionType,
-            "questionOrder": idx + 1,
-            "marks": marks,
-            "choices": choices
-        }
-        questions.append(question)
+    questionText = ""
+    questionType = ""
+    marks = 1
+    choices = []
+    reading_choices = False
+    order = 0
+
+    for line in lines:
+        line = line.strip()
+
+        # Detect start of a new question block
+        if line.lower().startswith("q:"):
+            # Save previous question if any
+            _flush(questionText, questionType, marks, choices, order)
+            # Reset for new question
+            order += 1
+            questionText = line[2:].strip() if len(line) > 2 else ""
+            questionType = ""
+            marks = 1
+            choices = []
+            reading_choices = False
+        elif line.lower().startswith("type:"):
+            questionType = line[5:].strip().upper()
+            reading_choices = False
+        elif line.lower().startswith("marks:"):
+            try:
+                marks = int(line[6:].strip())
+            except Exception:
+                marks = 1
+            reading_choices = False
+        elif line.lower().startswith("choices:"):
+            reading_choices = True
+        elif reading_choices and line and (line[0].isdigit() or line[0] == '-'):
+            # E.g., "1. Option [*]"
+            rest = line.split(".", 1)[1] if "." in line else line
+            rest = rest.strip()
+            is_correct = False
+            if rest.endswith("*"):
+                is_correct = True
+                rest = rest[:-1].strip()
+            choices.append({
+                "choiceText": rest,
+                "isCorrect": is_correct,
+                "choiceOrder": len(choices) + 1
+            })
+
+    # Don't forget the last question
+    _flush(questionText, questionType, marks, choices, order)
     return questions
 
 
