@@ -27,4 +27,5 @@ class ImageParser(BaseParser):
         image = Image.open(io.BytesIO(file_bytes))
         text = pytesseract.image_to_string(image)
         logger.info("OCR extracted %d chars from image", len(text))
+        logger.debug("OCR raw text:\n%s", text)
         return parse_text_block(text)

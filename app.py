@@ -13,7 +13,7 @@ from parsers import ParserResolver
 # Logging
 # ---------------------------------------------------------------------------
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
 )
 logger = logging.getLogger(__name__)
@@ -119,6 +119,7 @@ async def parse_questions(file: UploadFile = File(...)):
     # Validate
     errors = validate_questions(questions)
     if errors:
+        logger.warning("Validation failed for '%s': %s", filename, errors)
         return JSONResponse(content={"errors": errors}, status_code=422)
 
     return {"questions": questions}

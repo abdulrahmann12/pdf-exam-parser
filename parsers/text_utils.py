@@ -53,11 +53,14 @@ def parse_text_block(text: str) -> List[Dict[str, Any]]:
 
         elif reading_choices and line and (line[0].isdigit() or line[0] == "-"):
             rest = line.split(".", 1)[1].strip() if "." in line else line
-            is_correct = rest.endswith("*")
+            # Strip trailing OCR artifacts and detect correct-answer marker
+            # OCR may produce: "Jupiter *", "Jupiter*", "Jupiter *|", "Jupiter * " etc.
+            cleaned = rest.rstrip().rstrip("|").rstrip()
+            is_correct = cleaned.endswith("*")
             if is_correct:
-                rest = rest[:-1].strip()
+                cleaned = cleaned[:-1].strip()
             choices.append({
-                "choiceText": rest,
+                "choiceText": cleaned,
                 "isCorrect": is_correct,
                 "choiceOrder": len(choices) + 1,
             })
