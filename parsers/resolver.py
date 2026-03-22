@@ -48,7 +48,11 @@ class ParserResolver:
                 return parser
 
         # Should never reach here because FallbackParser.supports() always returns True
-        raise ValueError(f"No parser found for file='{filename}' content_type='{content_type}'")
+        raise ValueError(
+            f"No parser available for file '{filename}' (content_type='{content_type}'). "
+            f"Supported formats: PDF, CSV, Excel (.xlsx/.xls), Word (.docx), "
+            f"images (PNG/JPG), and plain text (.txt)."
+        )
 
     def register(self, parser: BaseParser, before_fallback: bool = True) -> None:
         """Dynamically register a new parser at runtime.

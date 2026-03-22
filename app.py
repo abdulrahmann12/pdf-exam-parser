@@ -89,7 +89,15 @@ async def parse_questions(file: UploadFile = File(...)):
     Accept ANY uploaded file, detect its type, parse it with the
     appropriate parser, validate, and return standardized question JSON.
     """
-    content = await file.read()
+    try:
+        content = await file.read()
+    except Exception as e:
+        logger.error("Failed to read uploaded file: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to read the uploaded file. The file may be corrupted or the upload was interrupted.",
+        ) from e
+
     filename = file.filename or "unknown"
     content_type = file.content_type or "application/octet-stream"
 
@@ -98,8 +106,24 @@ async def parse_questions(file: UploadFile = File(...)):
         filename, content_type, len(content),
     )
 
+    if not content:
+        logger.warning("Empty file uploaded: '%s'", filename)
+        raise HTTPException(
+            status_code=400,
+            detail=f"The uploaded file '{filename}' is empty. Please upload a file with content.",
+        )
+
     # Resolve the right parser
-    parser = resolver.resolve(filename, content_type)
+    try:
+        parser = resolver.resolve(filename, content_type)
+    except ValueError as e:
+        logger.error("No parser found for '%s' (content_type='%s'): %s", filename, content_type, e)
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file type: '{filename}' (content_type='{content_type}'). "
+                   f"No suitable parser is available for this file format.",
+        ) from e
+
     parser_name = parser.__class__.__name__
 
     # Parse
@@ -108,8 +132,25 @@ async def parse_questions(file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Parser %s failed for '%s': %s", parser_name, filename, e)
-        raise HTTPException(status_code=422, detail=f"Error parsing file: {str(e)}")
+        logger.error(
+            "Parser %s failed for file '%s' (content_type='%s', size=%d bytes): %s",
+            parser_name, filename, content_type, len(content), e, exc_info=True,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail=f"Failed to parse '{filename}' using {parser_name}: {e}. "
+                   f"Please verify the file is not corrupted and follows the expected format.",
+        ) from e
+
+    if not questions:
+        logger.warning(
+            "No questions extracted from '%s' using %s", filename, parser_name,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail=f"No questions could be extracted from '{filename}'. "
+                   f"Please ensure the file contains questions in the expected format.",
+        )
 
     logger.info(
         "Parsing complete: file='%s', parser=%s, questions_extracted=%d",

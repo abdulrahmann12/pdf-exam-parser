@@ -21,11 +21,49 @@ class ImageParser(BaseParser):
         )
 
     def parse(self, file_bytes: bytes) -> List[Dict[str, Any]]:
-        from PIL import Image
-        import pytesseract
+        try:
+            from PIL import Image
+        except ImportError as e:
+            raise ValueError(
+                "Image parsing requires the 'Pillow' library. Please install it with: pip install Pillow"
+            ) from e
 
-        image = Image.open(io.BytesIO(file_bytes))
-        text = pytesseract.image_to_string(image)
+        try:
+            import pytesseract
+        except ImportError as e:
+            raise ValueError(
+                "Image parsing requires 'pytesseract'. Please install it with: pip install pytesseract "
+                "and ensure Tesseract OCR is installed on the system."
+            ) from e
+
+        try:
+            image = Image.open(io.BytesIO(file_bytes))
+        except Exception as e:
+            raise ValueError(
+                f"Failed to open image: the file appears to be corrupted or is not a valid image. "
+                f"({type(e).__name__}: {e})"
+            ) from e
+
+        try:
+            text = pytesseract.image_to_string(image)
+        except pytesseract.TesseractNotFoundError as e:
+            raise ValueError(
+                "Tesseract OCR engine is not installed or not found in PATH. "
+                "Please install Tesseract: https://github.com/tesseract-ocr/tesseract"
+            ) from e
+        except Exception as e:
+            raise ValueError(
+                f"OCR processing failed: {type(e).__name__}: {e}. "
+                f"The image may be too large, too low-resolution, or in an unsupported format."
+            ) from e
+
         logger.info("OCR extracted %d chars from image", len(text))
         logger.debug("OCR raw text:\n%s", text)
+
+        if not text.strip():
+            raise ValueError(
+                "OCR could not extract any text from the image. "
+                "Ensure the image contains readable text and has sufficient resolution."
+            )
+
         return parse_text_block(text)

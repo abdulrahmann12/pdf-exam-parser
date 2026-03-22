@@ -16,5 +16,15 @@ class FallbackParser(BaseParser):
 
     def parse(self, file_bytes: bytes) -> List[Dict[str, Any]]:
         logger.warning("FallbackParser invoked — treating file as raw text")
-        text = file_bytes.decode("utf-8", errors="replace")
+        try:
+            text = file_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            logger.warning("UTF-8 decoding failed in FallbackParser, falling back to latin-1")
+            text = file_bytes.decode("latin-1")
+
+        if not text.strip():
+            raise ValueError(
+                "The file is empty or contains no readable text content."
+            )
+
         return parse_text_block(text)

@@ -1,6 +1,9 @@
 """Shared helper for parsing the Q:/Type:/Marks:/Choices: text format."""
 
+import logging
 from typing import List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 def parse_text_block(text: str) -> List[Dict[str, Any]]:
@@ -44,7 +47,11 @@ def parse_text_block(text: str) -> List[Dict[str, Any]]:
         elif line.lower().startswith("marks:"):
             try:
                 marks = int(line[6:].strip())
+                if marks < 1:
+                    logger.warning("Question %d: marks value '%s' is less than 1, defaulting to 1", order, line[6:].strip())
+                    marks = 1
             except ValueError:
+                logger.warning("Question %d: invalid marks value '%s', defaulting to 1", order, line[6:].strip())
                 marks = 1
             reading_choices = False
 

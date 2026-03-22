@@ -29,6 +29,18 @@ class ExcelParser(BaseParser):
         )
 
     def parse(self, file_bytes: bytes) -> List[Dict[str, Any]]:
-        df = pd.read_excel(io.BytesIO(file_bytes))
-        logger.info("Excel loaded: %d rows", len(df))
+        try:
+            df = pd.read_excel(io.BytesIO(file_bytes))
+        except Exception as e:
+            raise ValueError(
+                f"Failed to read Excel file: the file appears to be corrupted or is not a valid .xlsx/.xls file. "
+                f"({type(e).__name__}: {e})"
+            ) from e
+
+        if df.empty:
+            raise ValueError(
+                "The Excel file contains no data rows. Please ensure the file has question data."
+            )
+
+        logger.info("Excel loaded: %d rows, columns: %s", len(df), list(df.columns))
         return dataframe_to_questions(df)

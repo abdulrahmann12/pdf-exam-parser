@@ -20,6 +20,16 @@ class TextParser(BaseParser):
         )
 
     def parse(self, file_bytes: bytes) -> List[Dict[str, Any]]:
-        text = file_bytes.decode("utf-8", errors="replace")
+        try:
+            text = file_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            logger.warning("UTF-8 decoding failed, falling back to latin-1")
+            text = file_bytes.decode("latin-1")
+
+        if not text.strip():
+            raise ValueError(
+                "The text file is empty or contains only whitespace."
+            )
+
         logger.info("Text file: %d chars", len(text))
         return parse_text_block(text)

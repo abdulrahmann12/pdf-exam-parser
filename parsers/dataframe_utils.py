@@ -13,18 +13,43 @@ TRUE_VALUES = {"yes", "true", "t", "1"}
 
 
 def dataframe_to_questions(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    # Validate required columns exist
+    required_columns = {"questionText", "questionType"}
+    available_columns = set(df.columns)
+    missing = required_columns - available_columns
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required column(s): {', '.join(sorted(missing))}. "
+                   f"Found columns: {', '.join(df.columns)}. "
+                   f"Expected at least: questionText, questionType, marks, choice1Text, choice1IsCorrect, ...",
+        )
+
     questions: List[Dict[str, Any]] = []
 
     for idx, row in df.iterrows():
+        row_num = idx + 1
         question_text = str(row.get("questionText", "")).strip()
         question_type = str(row.get("questionType", "")).strip().upper()
+
         raw_marks = row.get("marks")
-        marks = int(raw_marks) if not pd.isnull(raw_marks) else 1
+        try:
+            marks = int(raw_marks) if not pd.isnull(raw_marks) else 1
+        except (ValueError, TypeError) as e:
+            logger.warning("Row %d: invalid marks value '%s', defaulting to 1", row_num, raw_marks)
+            marks = 1
+
+        if not question_text:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Row {row_num}: 'questionText' is missing or empty. Every row must have question text.",
+            )
 
         if question_type not in VALID_QUESTION_TYPES:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid questionType '{question_type}' on row {idx + 1}",
+                detail=f"Row {row_num}: invalid questionType '{question_type}'. "
+                       f"Allowed types are: {', '.join(sorted(VALID_QUESTION_TYPES))}.",
             )
 
         choices: List[Dict[str, Any]] = []
